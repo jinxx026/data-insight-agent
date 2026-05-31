@@ -1,0 +1,13 @@
+Starting DataInsight Agent...
+
+Open this URL after Streamlit finishes starting:
+http://127.0.0.1:8501
+
+Keep this window open while using the app.
+Press Ctrl+C to stop the server.
+
+
+  You can now view your Streamlit app in your browser.
+
+  URL: http://127.0.0.1:8501
+
