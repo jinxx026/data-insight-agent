@@ -1,107 +1,244 @@
 # DataInsight Agent
 
-DataInsight Agent is an LLM-powered data analysis system in progress. The first milestone focuses on uploading structured datasets and showing a basic data preview.
+DataInsight Agent 是一个基于 LLM + RAG + 多 Agent 工作流的智能数据分析系统。用户上传 CSV 或 Excel 数据集后，系统可以自动完成字段类型识别、数据质量检测、探索性数据分析、图表推荐、自然语言洞察生成、RAG 问答、SQL 表格查询和 Markdown/HTML 报告导出。
 
-## Day 1 MVP
+这个项目的目标不是做一个普通 dashboard，而是把数据分析流程拆成多个可复用 Agent，让系统能够自动理解数据、选择分析方法，并用自然语言解释结果。
 
-- Streamlit app shell
-- CSV and Excel upload
-- Excel sheet selection
-- pandas-based dataset loading
-- First rows preview
-- Basic dataset summary
-- Per-column overview with dtype, missing rate, and unique rate
+## Demo Flow
 
-## Day 2 Smart Field Profiling
+1. 上传 CSV 或 Excel 文件。
+2. 如果是 Excel，选择需要分析的 Sheet。
+3. 系统自动运行多 Agent 分析流程。
+4. 查看字段画像、数据质量问题、EDA 图表和洞察总结。
+5. 使用 RAG Q&A 询问数据分析方法或当前数据集问题。
+6. 使用 Table Query Agent 对上传表格执行 SQL 查询。
+7. 下载 Markdown 或 HTML 分析报告。
 
-- Detects ID fields, numerical features, categorical features, datetime fields, text fields, and target variables
-- Explains why each smart type was assigned
-- Summarizes feature type counts for downstream EDA and agent planning
+## Key Features
 
-## Day 3 Data Quality Analysis
+- CSV / Excel 上传，支持 Excel Sheet 选择
+- 智能字段类型识别：ID、数值、类别、时间、文本、目标变量
+- 数据质量分析：缺失值、重复行、空字段、常量字段、高基数字段、异常值、目标类别不平衡
+- 自动 EDA：数值分布、类别分布、时间趋势、目标变量分布、目标变量分组对比、相关性分析
+- Insight Agent：基于本地规则或 LLM 生成自然语言数据洞察
+- RAG Q&A：基于内置数据分析知识库回答问题
+- Table Query Agent：用 DuckDB 对上传数据执行只读 SQL 查询
+- Natural Language to SQL：配置 LLM 后，可用自然语言生成 SQL
+- Report Agent：生成 Markdown 和 HTML 分析报告
+- FastAPI 后端：封装分析、问答、Sheet 读取和表格查询接口
+- Docker Compose：同时启动 Streamlit 前端和 FastAPI 后端
+- 中英文界面切换
 
-- Detects missing values, duplicate rows, empty fields, constant fields, ID fields, high-cardinality fields, numeric outliers, and target imbalance
-- Assigns rule-based severity levels
-- Produces recommendations that can be reused by the future Insight Agent and Report Agent
+## Tech Stack
 
-## Day 4 Automatic EDA
+| Layer | Tech |
+| --- | --- |
+| Frontend | Streamlit |
+| Backend | FastAPI |
+| Data Processing | pandas, numpy |
+| SQL Engine | DuckDB |
+| Visualization | Altair |
+| LLM API | OpenAI-compatible API, DeepSeek, GPT, Gemini, Kimi |
+| RAG | Local TF-IDF retriever, Markdown knowledge base |
+| Deployment | Docker, Docker Compose, Streamlit Community Cloud |
 
-- Recommends EDA tasks from smart field types
-- Renders numeric distributions, category counts, datetime trends, target distribution, target-by-category comparisons, and correlation heatmaps
-- Uses pandas for computation and Altair for charts so the visualizations are based on real calculated statistics
-
-## Day 5 Insight Agent
-
-- Generates natural language insight summaries from structured profiling, quality, and EDA outputs
-- Uses local rule-based insights by default so the app works without an API key
-- Optionally calls an OpenAI-compatible chat completions API from sidebar inputs or environment variables
-
-## Day 6 Markdown Reports
-
-- Generates complete Markdown and HTML analysis reports from the same structured outputs shown in the app
-- Includes dataset overview, smart field profile, data quality issues, automatic EDA plan, key insights, and recommended next steps
-- Provides an in-app preview plus Markdown and HTML download buttons
-
-## Version 2 Step 1 Multi-Agent Workflow
-
-- Adds a workflow orchestrator that runs Data Loader, Data Profiler Agent, Data Quality Agent, EDA Agent, Insight Agent, and Report Agent in sequence
-- Returns one shared `AnalysisWorkflowResult` object containing all intermediate outputs and the final Markdown report
-- Shows workflow execution steps in the Streamlit UI so users can see which agent produced each stage
-- Makes the same workflow reusable by the upcoming FastAPI backend, RAG QA layer, and Docker deployment
-
-## Version 2 Step 2 RAG Knowledge Base
-
-- Adds a built-in data analysis knowledge base under `knowledge_base/`
-- Covers feature types, missing values, outlier detection, correlation analysis, visualization choices, class imbalance, and EDA methods
-- Implements a local TF-IDF retrieval baseline that does not require external embedding APIs
-- Adds a Streamlit Q&A section that retrieves relevant knowledge snippets and shows source documents
-- Can be upgraded later to FAISS, Chroma, or another vector database with embeddings
-
-## Version 2 Step 3 Natural Language Q&A
-
-- Adds a QA Agent that combines current dataset analysis context with retrieved knowledge snippets
-- Answers field-specific questions such as why an ID field should not be used for modeling
-- Answers dataset-level questions such as major quality risks using the workflow output
-- Uses local deterministic answers by default and optionally calls the configured LLM for more natural responses
-
-## Version 2 Step 4 FastAPI Backend
-
-- Adds a FastAPI backend entry point at `app/main.py`
-- Exposes the reusable multi-agent workflow through HTTP APIs
-- Supports uploaded CSV and Excel datasets, including Excel sheet lookup
-- Returns dataset summary, field profile, quality issues, EDA recommendations, insights, workflow steps, and Markdown/HTML reports as JSON
-- Exposes a Q&A endpoint that combines the current dataset analysis with the RAG knowledge base
-
-Core API endpoints:
+## Architecture
 
 ```text
-GET  /api/health
-GET  /api/llm/presets
-POST /api/datasets/sheets
-POST /api/analysis
-POST /api/qa
+User
+  |
+  v
+Streamlit Frontend
+  |
+  +-- Upload CSV / Excel
+  +-- Display analysis results
+  +-- Run RAG Q&A
+  +-- Run SQL table queries
+  |
+  v
+Multi-Agent Workflow
+  |
+  +-- Data Loader
+  +-- Data Profiler Agent
+  +-- Data Quality Agent
+  +-- EDA Agent
+  +-- Insight Agent
+  +-- Report Agent
+  +-- RAG QA Agent
+  +-- Table Query Agent
+  |
+  v
+Data Layer
+  |
+  +-- pandas
+  +-- DuckDB
+  +-- Altair
+  |
+  v
+RAG Knowledge Base + Optional LLM API
 ```
 
-## Version 2 Step 5 Docker Deployment
+## Multi-Agent Workflow
 
-- Adds a `Dockerfile` for reproducible Python dependency installation
-- Adds `docker-compose.yml` to run the Streamlit frontend and FastAPI backend together
-- Exposes Streamlit on port `8501` and FastAPI docs on port `8000`
-- Keeps API keys outside the image by reading optional environment variables at runtime
+| Agent | Responsibility |
+| --- | --- |
+| Data Loader | 读取 CSV / Excel，生成数据集概览 |
+| Data Profiler Agent | 识别字段的语义类型和分析角色 |
+| Data Quality Agent | 检测缺失值、重复值、异常值、高基数字段等质量问题 |
+| EDA Agent | 根据字段类型自动推荐分析方法和图表 |
+| Insight Agent | 基于统计结果生成自然语言洞察 |
+| Report Agent | 生成 Markdown / HTML 分析报告 |
+| RAG QA Agent | 结合当前数据集和知识库回答自然语言问题 |
+| Table Query Agent | 将数据表注册为 DuckDB 内存表并执行只读 SQL |
 
-Recommended app workflow:
+## Project Structure
 
-1. Choose `LLM if configured` in the sidebar.
-2. Enter API Key, Base URL, and model name in the sidebar.
-3. Run the analysis. The key is only used in the current Streamlit session and is not written to project files.
+```text
+data-insight-agent/
+├── app/
+│   ├── agents/
+│   │   ├── insight_agent.py
+│   │   ├── qa_agent.py
+│   │   ├── report_agent.py
+│   │   ├── table_query_agent.py
+│   │   └── workflow_agent.py
+│   ├── api/
+│   │   └── routes.py
+│   ├── data/
+│   │   ├── eda.py
+│   │   ├── loader.py
+│   │   ├── profiler.py
+│   │   └── quality.py
+│   ├── llm/
+│   │   ├── model.py
+│   │   └── presets.py
+│   ├── rag/
+│   │   └── retriever.py
+│   ├── ui/
+│   │   └── i18n.py
+│   └── main.py
+├── frontend/
+│   ├── requirements.txt
+│   └── streamlit_app.py
+├── knowledge_base/
+├── sample_data/
+├── outputs/
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── run_app.bat
+├── run_api.bat
+└── run_docker.bat
+```
 
-Optional local persistent configuration without PowerShell:
+## Quick Start
 
-1. Copy `.streamlit/secrets.example.toml` to `.streamlit/secrets.toml`.
-2. Fill in your real API key and preferred provider/model.
-3. Start the app with `run_app.bat`; the sidebar will use these values by default.
+### Windows
 
-Example `.streamlit/secrets.toml`:
+启动 Streamlit 前端：
+
+```text
+run_app.bat
+```
+
+打开浏览器：
+
+```text
+http://127.0.0.1:8501
+```
+
+启动 FastAPI 后端：
+
+```text
+run_api.bat
+```
+
+后端入口页：
+
+```text
+http://127.0.0.1:8000/
+```
+
+API 文档：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### macOS / Linux
+
+```bash
+pip install -r requirements.txt
+streamlit run frontend/streamlit_app.py
+```
+
+另开一个终端启动 API：
+
+```bash
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+## Docker
+
+启动 Streamlit 前端和 FastAPI 后端：
+
+```bash
+docker compose up --build
+```
+
+访问地址：
+
+```text
+Streamlit Frontend: http://127.0.0.1:8501
+Backend Entry:      http://127.0.0.1:8000/
+FastAPI Docs:       http://127.0.0.1:8000/docs
+```
+
+Windows 也可以直接双击：
+
+```text
+run_docker.bat
+```
+
+## LLM Configuration
+
+系统默认可以不配置 LLM，使用本地规则生成分析结果。配置 LLM 后，可以启用：
+
+- LLM 洞察生成
+- RAG 问答增强回答
+- 自然语言生成 SQL
+
+支持的预设提供商：
+
+- DeepSeek
+- OpenAI GPT
+- Google Gemini
+- Kimi
+- Custom OpenAI-compatible API
+
+### Sidebar Runtime Config
+
+在 Streamlit 侧边栏选择：
+
+```text
+Insight mode -> LLM if configured
+Provider -> DeepSeek / OpenAI GPT / Google Gemini / Kimi / Custom
+API Key -> your_api_key
+Base URL -> provider base url
+Model -> model name
+```
+
+API Key 只会保存在当前 Streamlit session 中，不会写入项目文件。
+
+### Local Secrets
+
+复制示例文件：
+
+```text
+.streamlit/secrets.example.toml -> .streamlit/secrets.toml
+```
+
+填写：
 
 ```toml
 [llm]
@@ -111,103 +248,150 @@ base_url = "https://api.deepseek.com/v1"
 model = "deepseek-chat"
 ```
 
-For Streamlit Community Cloud, add the same TOML content in the app's `Settings -> Secrets` panel.
+`.streamlit/secrets.toml` 已被 `.gitignore` 忽略，不应该提交到 GitHub。
 
-Optional PowerShell environment variables:
+## Table Query Agent
 
-```powershell
-$env:LLM_API_KEY="your_api_key_here"
-$env:LLM_BASE_URL="https://api.deepseek.com/v1"
-$env:LLM_MODEL="deepseek-chat"
-.\run_app.bat
-```
-
-## UI Language
-
-- Supports Chinese and English display from the sidebar language selector
-- Localizes UI text, smart feature types, quality issue types, severity labels, explanations, and recommendations
-
-## Run Locally
-
-Windows:
-
-Double-click `run_app.bat`, or run it from the project folder. The script will create `.venv`, install dependencies when needed, start Streamlit, and open the browser automatically.
-
-To run the FastAPI backend, double-click `run_api.bat`. It opens the interactive API docs at:
+Table Query Agent 会把当前上传的数据注册成 DuckDB 内存表：
 
 ```text
-http://127.0.0.1:8000/docs
+dataset
 ```
 
-macOS/Linux:
+你可以直接写 SQL：
 
-```bash
-pip install -r requirements.txt
-streamlit run frontend/streamlit_app.py
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```sql
+SELECT contract_type, COUNT(*) AS customers
+FROM dataset
+GROUP BY contract_type
+ORDER BY customers DESC;
 ```
 
-## Run With Docker
-
-Build and start both services:
-
-```bash
-docker compose up --build
-```
-
-On Windows, you can also double-click:
+也可以在配置 LLM 后输入自然语言：
 
 ```text
-run_docker.bat
+按合同类型统计客户数量，并按客户数量降序排列
 ```
 
-Open the Streamlit app:
+系统会生成 SQL，再由 DuckDB 执行并输出表格。
+
+### SQL Safety
+
+为了避免执行危险操作，系统只允许：
 
 ```text
-http://127.0.0.1:8501
+SELECT
+WITH
 ```
 
-Open the FastAPI docs:
+禁止：
 
 ```text
-http://127.0.0.1:8000/docs
+INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, COPY, INSTALL, LOAD, PRAGMA
 ```
 
-Optional LLM environment variables:
+LLM 只负责生成 SQL，真正执行和安全校验由系统完成。
 
-```bash
-LLM_API_KEY=your_api_key_here LLM_BASE_URL=https://api.deepseek.com/v1 LLM_MODEL=deepseek-chat docker compose up --build
-```
+## RAG Knowledge Base
 
-## Deploy As A Website
-
-For a public URL that does not require PowerShell or a local server, deploy the GitHub repo to Streamlit Community Cloud:
-
-1. Go to Streamlit Community Cloud.
-2. Create a new app from `jinxx026/data-insight-agent`.
-3. Set the main file path to `frontend/streamlit_app.py`.
-4. Keep Python dependencies in `requirements.txt`. A duplicate `frontend/requirements.txt` is included so Streamlit Community Cloud can find dependencies when the app entrypoint is deployed from the `frontend/` directory.
-5. If using LLM mode, add secrets for `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL`, or enter them in the app sidebar at runtime.
-
-## Project Structure
+内置知识库位于：
 
 ```text
-data-insight-agent/
-├── app/
-│   └── data/
-│       └── loader.py
-├── frontend/
-│   └── streamlit_app.py
-├── sample_data/
-│   ├── customer_churn_sample.csv
-│   └── customer_churn_quality_demo.csv
-├── outputs/
-│   ├── charts/
-│   └── reports/
-├── requirements.txt
-└── README.md
+knowledge_base/
 ```
 
-## Next Milestone
+包含：
 
-Next Version 2 step: improve the Streamlit frontend so it can call the FastAPI backend instead of always running the workflow in-process.
+- feature_types.md
+- missing_values.md
+- outlier_detection.md
+- correlation_analysis.md
+- visualization_guide.md
+- class_imbalance.md
+- eda_methods.md
+
+用户可以询问：
+
+```text
+为什么 customer_id 不适合建模？
+为什么要看缺失值？
+类别不平衡有什么影响？
+什么时候用柱状图，什么时候用折线图？
+```
+
+系统会结合当前数据集分析结果和知识库片段回答。
+
+## FastAPI Endpoints
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/api/health` | 健康检查 |
+| GET | `/api/llm/presets` | 获取 LLM provider 和 model 预设 |
+| POST | `/api/datasets/sheets` | 读取 Excel Sheet 名称 |
+| POST | `/api/analysis` | 上传数据集并返回完整分析结果 |
+| POST | `/api/qa` | 基于当前数据集和知识库问答 |
+| POST | `/api/table-query` | 对上传数据执行 SQL 查询 |
+
+## Streamlit Community Cloud Deployment
+
+如果仓库结构是：
+
+```text
+datainsight/
+└── data-insight-agent/
+    ├── frontend/
+    │   └── streamlit_app.py
+    └── requirements.txt
+```
+
+Streamlit Cloud 的 Main file path 应填写：
+
+```text
+data-insight-agent/frontend/streamlit_app.py
+```
+
+仓库根目录也建议放一个 `requirements.txt`，内容至少包含：
+
+```txt
+streamlit==1.45.1
+altair==5.5.0
+duckdb==1.1.3
+pandas==2.2.3
+numpy==2.2.6
+openpyxl==3.1.5
+requests==2.34.2
+```
+
+如果部署时可选择 Python 版本，建议选择 Python 3.12。
+
+## Example Questions
+
+数据分析问答：
+
+```text
+这个数据集有哪些主要质量风险？
+为什么某个字段被识别成 ID？
+缺失值应该删除还是填充？
+目标变量是否存在类别不平衡？
+```
+
+SQL 查询：
+
+```text
+筛选出 monthly_charges 大于 80 的客户
+按 contract_type 统计客户数量
+计算不同 payment_method 的平均 monthly_charges
+找出 total_charges 最高的前 10 个客户
+```
+
+## Resume Highlights
+
+- Built an LLM-powered data analysis system with Streamlit and FastAPI for CSV/Excel profiling, data quality checks, EDA automation, insight generation, and report export.
+- Designed a multi-agent workflow including Profiler, Quality, EDA, Insight, Report, RAG QA, and Table Query agents.
+- Implemented RAG-based data analysis Q&A with a local knowledge base and TF-IDF retrieval.
+- Built a DuckDB-powered Table Query Agent supporting read-only SQL and natural-language-to-SQL over uploaded datasets.
+- Containerized the Streamlit frontend and FastAPI backend with Docker Compose.
+
+## License
+
+This project is intended for learning, portfolio, and internship application use.

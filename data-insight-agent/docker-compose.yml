@@ -14,6 +14,7 @@ services:
     ports:
       - "8501:8501"
     environment:
+      FRONTEND_URL: http://127.0.0.1:8501
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
       LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
@@ -34,6 +35,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      FRONTEND_URL: http://127.0.0.1:8501
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
       LLM_MODEL: ${LLM_MODEL:-deepseek-chat}

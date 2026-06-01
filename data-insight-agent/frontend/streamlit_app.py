@@ -19,6 +19,7 @@ from app.agents.workflow_agent import (
     workflow_steps_to_dataframe,
 )
 from app.agents.qa_agent import answer_user_question
+from app.agents.table_query_agent import generate_sql_from_question, run_table_query
 from app.data.loader import (
     is_excel_file,
     list_excel_sheets,
@@ -468,6 +469,120 @@ def render_rag_qa(workflow_result: object) -> None:
         st.dataframe(localize_dataframe(qa_result.retrieved_df, language), use_container_width=True, hide_index=True)
 
 
+def render_table_query_agent(df: pd.DataFrame, workflow_result: object) -> None:
+    st.subheader(_ui_text("table_query_title"))
+    st.caption(_ui_text("table_query_caption"))
+
+    mode = st.radio(
+        _ui_text("table_query_mode"),
+        options=["manual_sql", "natural_language"],
+        format_func=lambda option: _ui_text(option),
+        horizontal=True,
+    )
+
+    sql = ""
+    if mode == "manual_sql":
+        sql = st.text_area(
+            _ui_text("manual_sql_label"),
+            value="SELECT * FROM dataset LIMIT 20",
+            height=140,
+            help=_ui_text("sql_help"),
+        )
+    else:
+        question = st.text_input(
+            _ui_text("nl_query_label"),
+            placeholder=_ui_text("nl_query_placeholder"),
+        )
+        if st.button(_ui_text("generate_sql_button"), use_container_width=True):
+            if not question.strip():
+                st.warning(_ui_text("empty_question_warning"))
+            elif runtime_llm_config is None:
+                st.warning(_ui_text("llm_required_warning"))
+            else:
+                try:
+                    st.session_state["generated_table_sql"] = generate_sql_from_question(
+                        question=question,
+                        df=df,
+                        profile_df=workflow_result.profile_df,
+                        llm_config=runtime_llm_config,
+                        language=language,
+                    )
+                except Exception as exc:
+                    st.error(_ui_text("generate_sql_error", error=exc))
+
+        sql = st.text_area(
+            _ui_text("generated_sql_label"),
+            value=st.session_state.get("generated_table_sql", ""),
+            height=140,
+            help=_ui_text("sql_help"),
+        )
+
+    if st.button(_ui_text("run_sql_button"), use_container_width=True):
+        query_result = run_table_query(df, sql)
+        if query_result.error:
+            st.error(_ui_text("sql_error", error=query_result.error))
+            return
+
+        st.code(query_result.sql, language="sql")
+        if query_result.truncated:
+            st.warning(_ui_text("result_truncated"))
+        st.dataframe(query_result.result_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            label=_ui_text("download_query_result"),
+            data=query_result.result_df.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"{_slugify_filename(dataset_name)}_query_result.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+
+def _ui_text(key: str, **kwargs: object) -> str:
+    labels = {
+        "zh": {
+            "table_query_title": "表格查询 Agent",
+            "table_query_caption": "用只读 SQL 查询当前上传的数据表。表名固定为 dataset。",
+            "table_query_mode": "查询模式",
+            "manual_sql": "手写 SQL",
+            "natural_language": "自然语言生成 SQL",
+            "manual_sql_label": "输入 SQL",
+            "generated_sql_label": "生成/编辑 SQL",
+            "nl_query_label": "输入你想对表格做的操作",
+            "nl_query_placeholder": "例如：按地区统计销售额，并按销售额降序排列",
+            "generate_sql_button": "生成 SQL",
+            "run_sql_button": "运行 SQL",
+            "download_query_result": "下载查询结果 CSV",
+            "empty_question_warning": "请先输入一个自然语言问题。",
+            "llm_required_warning": "自然语言生成 SQL 需要先在侧边栏配置 LLM。你也可以切换到手写 SQL 模式。",
+            "generate_sql_error": "SQL 生成失败：{error}",
+            "sql_error": "SQL 执行失败：{error}",
+            "result_truncated": "结果超过 500 行，当前只展示前 500 行。",
+            "sql_help": "只允许 SELECT 或 WITH 查询。当前数据表名是 dataset。",
+        },
+        "en": {
+            "table_query_title": "Table Query Agent",
+            "table_query_caption": "Query the current uploaded dataset with read-only SQL. The table name is dataset.",
+            "table_query_mode": "Query mode",
+            "manual_sql": "Manual SQL",
+            "natural_language": "Natural language to SQL",
+            "manual_sql_label": "Enter SQL",
+            "generated_sql_label": "Generated / editable SQL",
+            "nl_query_label": "Describe the table operation you want",
+            "nl_query_placeholder": "Example: summarize revenue by region and sort by revenue descending",
+            "generate_sql_button": "Generate SQL",
+            "run_sql_button": "Run SQL",
+            "download_query_result": "Download query result CSV",
+            "empty_question_warning": "Enter a natural-language question first.",
+            "llm_required_warning": "Natural-language SQL generation requires an LLM config in the sidebar. You can use Manual SQL mode instead.",
+            "generate_sql_error": "SQL generation failed: {error}",
+            "sql_error": "SQL execution failed: {error}",
+            "result_truncated": "The result exceeded 500 rows, so only the first 500 rows are shown.",
+            "sql_help": "Only SELECT or WITH queries are allowed. The current table name is dataset.",
+        },
+    }
+    text = labels.get(language, labels["en"]).get(key, key)
+    return text.format(**kwargs)
+
+
 def _slugify_filename(value: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9_-]+", "_", value).strip("_").lower()
     return slug or "dataset"
@@ -532,6 +647,8 @@ else:
     )
 
     render_rag_qa(workflow_result)
+
+    render_table_query_agent(df, workflow_result)
 
     st.subheader(t(language, "data_preview"))
     st.dataframe(df.head(20), use_container_width=True)

@@ -9,6 +9,7 @@ import pandas as pd
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.agents.qa_agent import answer_user_question
+from app.agents.table_query_agent import generate_sql_from_question, run_table_query
 from app.agents.workflow_agent import AnalysisWorkflowResult, WorkflowConfig, run_analysis_workflow
 from app.data.loader import is_excel_file, list_excel_sheets, load_dataset
 from app.llm.model import build_llm_config
@@ -107,6 +108,62 @@ def answer_question(
         "mode": qa_result.mode,
         "error": qa_result.error,
         "retrieved_knowledge": _dataframe_records(qa_result.retrieved_df),
+    }
+
+
+@router.post("/table-query")
+def query_table(
+    file: UploadFile = File(...),
+    sql: str = Form(default=""),
+    question: str = Form(default=""),
+    sheet_name: str | None = Form(default=None),
+    language: str = Form(default="zh"),
+    use_llm: bool = Form(default=False),
+    api_key: str = Form(default=""),
+    base_url: str = Form(default="https://api.deepseek.com/v1"),
+    model: str = Form(default="deepseek-chat"),
+) -> dict[str, Any]:
+    df = _load_uploaded_dataset(file, sheet_name)
+    normalized_language = _normalize_language(language)
+    llm_config = build_llm_config(api_key=api_key, base_url=base_url, model=model)
+
+    workflow_result = run_analysis_workflow(
+        df=df,
+        config=WorkflowConfig(
+            dataset_name=file.filename or "uploaded_dataset",
+            language=normalized_language,
+            use_llm=False,
+            llm_config=None,
+        ),
+    )
+
+    query_sql = sql.strip()
+    if not query_sql:
+        if not question.strip():
+            raise HTTPException(status_code=400, detail="Either sql or question is required.")
+        if not use_llm or llm_config is None:
+            raise HTTPException(status_code=400, detail="Natural-language table query requires LLM configuration.")
+        try:
+            query_sql = generate_sql_from_question(
+                question=question,
+                df=df,
+                profile_df=workflow_result.profile_df,
+                llm_config=llm_config,
+                language=normalized_language,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to generate SQL: {exc}") from exc
+
+    result = run_table_query(df, query_sql)
+    if result.error:
+        raise HTTPException(status_code=400, detail=result.error)
+
+    return {
+        "dataset_name": workflow_result.dataset_name,
+        "sql": result.sql,
+        "rows": len(result.result_df),
+        "truncated": result.truncated,
+        "result": _dataframe_records(result.result_df),
     }
 
 

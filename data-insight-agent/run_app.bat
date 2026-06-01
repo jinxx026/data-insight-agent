@@ -3,7 +3,19 @@ setlocal
 
 cd /d "%~dp0"
 
-set APP_URL=http://127.0.0.1:8501
+set APP_PORT=8501
+netstat -ano | findstr /R /C:":8501 .*LISTENING" >nul 2>nul
+if not errorlevel 1 (
+    set APP_PORT=8502
+)
+netstat -ano | findstr /R /C:":8502 .*LISTENING" >nul 2>nul
+if not errorlevel 1 (
+    set APP_PORT=8503
+)
+set APP_URL=http://127.0.0.1:%APP_PORT%
+set STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+set STREAMLIT_SERVER_HEADLESS=true
+set STREAMLIT_CLIENT_TOOLBAR_MODE=minimal
 
 if not exist ".venv\Scripts\python.exe" (
     echo Creating local virtual environment...
@@ -18,7 +30,7 @@ if not exist ".venv\Scripts\python.exe" (
     )
 )
 
-".venv\Scripts\python.exe" -c "import streamlit, pandas, openpyxl, altair, requests" >nul 2>nul
+".venv\Scripts\python.exe" -c "import streamlit, pandas, openpyxl, altair, requests, duckdb" >nul 2>nul
 if errorlevel 1 (
     echo Installing project dependencies...
     ".venv\Scripts\python.exe" -m pip install -r requirements.txt
@@ -41,6 +53,6 @@ echo.
 
 start "" cmd /c "timeout /t 5 /nobreak >nul && start "" %APP_URL%"
 
-".venv\Scripts\python.exe" -m streamlit run "frontend\streamlit_app.py"
+".venv\Scripts\python.exe" -m streamlit run "frontend\streamlit_app.py" --server.headless=true --browser.gatherUsageStats=false --server.address=127.0.0.1 --server.port=%APP_PORT%
 
 pause
